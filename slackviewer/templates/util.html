@@ -23,7 +23,7 @@
                 </div>
                 <a href="#{{ message.id}}"><div class="time">{{ message.time }}</div></a>
                 <div class="msg">
-                    {{ message.msg|safe }}
+                    {{ message.msg|safe | indent(8, True) }}
                     {% for attachment in message.attachments -%}
                         <div class="message-attachment"
                             {%if attachment.color %}style="border-color: #{{attachment.color}}"{%endif%}>

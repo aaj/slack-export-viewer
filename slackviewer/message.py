@@ -111,6 +111,9 @@ class Message(object):
     def subtype(self):
         return self._message.get("subtype")
 
+    def __str__(self):
+        return f"{self.username} - {self.msg}"
+
 
 class LinkAttachment(object):
     """

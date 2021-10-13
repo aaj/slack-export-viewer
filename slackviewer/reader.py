@@ -166,6 +166,7 @@ class Reader(object):
             # gets path to dm directory that holds the json archive
             dir_path = os.path.join(self._PATH, name)
             messages = []
+            threads = {}
             # array of all days archived
             day_files = glob.glob(os.path.join(dir_path, "*.json"))
 
@@ -203,56 +204,58 @@ class Reader(object):
         """
         for channel_name in channel_data.keys():
             replies = {}
+            thread_locations = {}
 
             user_ts_lookup = {}
             items_to_remove = []
-            for i, m in enumerate(channel_data[channel_name]):
-                user = m._message.get('user')
-                ts = m._message.get('ts')
+
+            for i, message in enumerate(channel_data[channel_name]):
+                user = message._message.get('user')
+                ts = message._message.get('ts')
+                thread_ts = message._message.get('thread_ts')
 
                 if user is None or ts is None:
                     continue
 
-                k = (user, ts)
-                if k not in user_ts_lookup:
-                    user_ts_lookup[k] = []
-                user_ts_lookup[k].append((i, m))
+                if thread_ts and thread_ts != ts:
+                    if thread_ts not in replies:
+                        replies[thread_ts] = []
+                    replies[thread_ts].append(message)
+                    items_to_remove.append(i)
 
-            for location, message in enumerate(channel_data[channel_name]):
-                #   If there's a "reply_count" key, generate a list of user and timestamp dictionaries
-                if 'reply_count' in message._message or 'replies' in message._message:
-                    #   Identify and save where we are
-                    reply_list = []
-                    for reply in message._message['replies']:
-                        reply_list.append(reply)
-                    reply_objects = []
-                    for item in reply_list:
-                        item_lookup_key = (item['user'], item['ts'])
-                        item_replies = user_ts_lookup.get(item_lookup_key)
-                        if item_replies is not None:
-                            reply_objects.extend(item_replies)
-
-                    if not reply_objects:
-                        continue
-
-                    sorted_reply_objects = sorted(reply_objects, key=lambda tup: tup[0])
-                    for reply_obj_tuple in sorted_reply_objects:
-                        items_to_remove.append(reply_obj_tuple[0])
-                    replies[location] = [tup[1] for tup in sorted_reply_objects]
-            # Create an OrderedDict of thread locations and replies in reverse numerical order
-            sorted_threads = OrderedDict(sorted(replies.items(), reverse=True))
+                    continue # don't add replies to the list
 
             for idx_to_remove in sorted(items_to_remove, reverse=True):
                 del channel_data[channel_name][idx_to_remove]
 
-            # Iterate through the threads and insert them back into channel_data[channel_name] in response order
-            for grouping in sorted_threads.items():
-                location = grouping[0] + 1
-                for reply in grouping[1]:
-                    if not reply._message["text"].startswith("**Thread Reply:**"):
-                        reply._message["text"] = "**Thread Reply:** {}".format(reply._message['text'])
-                    channel_data[channel_name].insert(location, reply)
-                    location += 1
+            for i, message in enumerate(channel_data[channel_name]):
+                user = message._message.get('user')
+                ts = message._message.get('ts')
+                thread_ts = message._message.get('thread_ts')
+
+                if user is None or ts is None:
+                    continue
+
+                if thread_ts and thread_ts == ts:
+                    thread_locations[i] = thread_ts
+
+                k = (user, ts)
+                if k not in user_ts_lookup:
+                    user_ts_lookup[k] = []
+                user_ts_lookup[k].append((i, message))
+
+            for thread in sorted(thread_locations.items(), key=lambda tup: tup[0], reverse=True):
+
+                 location = thread[0] + 1
+                 replies_key = thread[1]
+                 thread_replies = replies.get(replies_key)
+                 if not thread_replies:
+                     continue
+
+                 for reply in sorted(thread_replies, key=lambda message: message._message['ts'], reverse=True):
+                     reply._message['subtype'] = 'reply'
+                     channel_data[channel_name].insert(location, reply)
+
         return channel_data
 
     def _read_from_json(self, file):
