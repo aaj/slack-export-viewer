@@ -1,5 +1,7 @@
 import flask
 
+from .utils.export import export_public_channels, export_private_channels
+
 
 app = flask.Flask(
     __name__,
@@ -87,25 +89,8 @@ def index():
     dms = list(flask._app_ctx_stack.dms.keys())
     mpims = list(flask._app_ctx_stack.mpims.keys())
 
-    dm_users = list(flask._app_ctx_stack.dm_users)
-    mpim_users = list(flask._app_ctx_stack.mpim_users)
-
-    from pathlib import Path
-    Path("output").mkdir(parents=True, exist_ok=True)
-
-    for channel in channels:
-        messages = flask._app_ctx_stack.channels[channel]
-        html = flask.render_template('viewer.html', messages=messages,
-            name=channel,
-            channels=sorted(channels),
-            groups=sorted(groups) if groups else {},
-            dm_users=dm_users,
-            mpim_users=mpim_users,
-            no_sidebar=app.no_sidebar,
-            no_external_references=app.no_external_references
-            )
-        with open(f"output/{channel}.html", "w") as fo:
-            fo.write(html)
+    export_public_channels()
+    export_private_channels()
 
     if channels:
         if "general" in channels:
